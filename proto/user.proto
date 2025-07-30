@@ -22,10 +22,11 @@ message RegisterRequest {
 }
 
 message AuthResponse {
-  string token = 1;
-  string message = 2;
+  bool success = 1;
+  string code = 2;
+  string message = 3;
+  string token = 4;
 } 
-
 
 message LoginRequest {
   string username = 1;
@@ -37,6 +38,13 @@ message ProfileRequest {
 }
 
 message ProfileResponse {
+  bool success = 1;
+  string code = 2;
+  string message = 3;
+  ProfileData data = 4;
+}
+
+message ProfileData {
   int32 id = 1;
   string username = 2;
   string name = 3;
