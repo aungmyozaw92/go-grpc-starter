@@ -1,13 +1,8 @@
-.PHONY: proto clean build run deps setup-env
+.PHONY: proto clean build build-client run test-client test-userlist test-crud deps setup-env
 
 # Generate protobuf files
 proto:
-	protoc --go_out=. --go-grpc_out=. proto/user.proto
-	mkdir -p proto/userpb
-	if [ -d "./github.com" ]; then \
-		mv ./github.com/aungmyozaw92/go-grpc-starter/proto/userpb/*.go proto/userpb/ && \
-		rm -rf ./github.com; \
-	fi
+	protoc --go_out=. --go-grpc_out=. --go_opt=module=github.com/aungmyozaw92/go-grpc-starter --go-grpc_opt=module=github.com/aungmyozaw92/go-grpc-starter proto/user.proto
 
 # Install dependencies
 deps:
@@ -30,6 +25,10 @@ setup-env:
 build:
 	go build -o bin/server cmd/server/main.go
 
+# Build the test client
+build-client:
+	go build -o bin/client cmd/client/main.go
+
 # Run the server with MySQL
 run:
 	@echo "Starting gRPC server with MySQL..."
@@ -37,6 +36,26 @@ run:
 		echo "Warning: No .env file found. Run 'make setup-env' first."; \
 	fi
 	go run cmd/server/main.go
+
+# Run the test client
+test-client:
+	@echo "Running gRPC test client..."
+	go run cmd/client/main.go
+
+# Test user list API
+test-userlist:
+	@echo "Testing user list API..."
+	go run cmd/test_userlist/main.go
+
+# Test CRUD operations
+test-crud:
+	@echo "Testing CRUD operations..."
+	go run cmd/test_crud/main.go
+
+# Test unique constraints
+test-unique:
+	@echo "Testing unique constraints..."
+	go run cmd/test_unique/main.go
 
 # Clean generated files
 clean:

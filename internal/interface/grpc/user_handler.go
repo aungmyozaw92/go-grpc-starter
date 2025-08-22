@@ -71,19 +71,25 @@ func (h *UserHandler) Register(ctx context.Context, req *userpb.RegisterRequest)
 	}
 
 	user := &entity.User{
-		Username:   req.Username,
-		Name:       req.Name,
-		Email:      &req.Email,
-		Phone:      req.Phone,
-		Mobile:     req.Mobile,
-		ImageURL:   req.ImageUrl,
-		Password:   req.Password,
-		IsActive:   &req.IsActive,
-		RoleID:     int(req.RoleId),
+		Username: req.Username,
+		Name:     req.Name,
+		Email:    &req.Email,
+		Phone:    req.Phone,
+		Mobile:   req.Mobile,
+		ImageURL: req.ImageUrl,
+		Password: req.Password,
+		IsActive: &req.IsActive,
+		RoleID:   int(req.RoleId),
 	}
 
 	token, err := h.UserUseCase.Register(user)
 	if err != nil {
+		if err.Error() == "username already exists" {
+			return nil, NewAlreadyExistsError(MsgUsernameExists)
+		}
+		if err.Error() == "email already exists" {
+			return nil, NewAlreadyExistsError(MsgEmailExists)
+		}
 		return nil, NewInternalError(MsgUserRegistrationFailed)
 	}
 
@@ -146,8 +152,8 @@ func (h *UserHandler) GetProfile(ctx context.Context, req *userpb.ProfileRequest
 			IsActive:  derefBool(user.IsActive),
 			RoleId:    int32(user.RoleID),
 			ImageUrl:  user.ImageURL,
-			CreatedAt: user.CreatedAt,
-			UpdatedAt: user.UpdatedAt,
+			CreatedAt: user.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+			UpdatedAt: user.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
 		},
 	}, nil
 }
@@ -164,4 +170,269 @@ func derefBool(b *bool) bool {
 		return *b
 	}
 	return false
+}
+
+func (h *UserHandler) GetUserList(ctx context.Context, req *userpb.UserListRequest) (*userpb.UserListResponse, error) {
+	// Validate token
+	if strings.TrimSpace(req.Token) == "" {
+		return nil, NewValidationError(MsgTokenRequired)
+	}
+
+	// Set default pagination values
+	page := int(req.Page)
+	limit := int(req.Limit)
+	search := strings.TrimSpace(req.Search)
+
+	if page <= 0 {
+		page = 1
+	}
+	if limit <= 0 {
+		limit = 10
+	}
+
+	// Get user list from usecase
+	result, err := h.UserUseCase.GetUserList(req.Token, page, limit, search)
+	if err != nil {
+		return nil, NewAuthenticationError(MsgInvalidToken)
+	}
+
+	// Convert users to protobuf format
+	var pbUsers []*userpb.UserData
+	for _, user := range result.Users {
+		pbUser := &userpb.UserData{
+			Id:        int32(user.ID),
+			Username:  user.Username,
+			Name:      user.Name,
+			Email:     deref(user.Email),
+			Phone:     user.Phone,
+			Mobile:    user.Mobile,
+			IsActive:  derefBool(user.IsActive),
+			RoleId:    int32(user.RoleID),
+			ImageUrl:  user.ImageURL,
+			CreatedAt: user.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+			UpdatedAt: user.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		}
+		pbUsers = append(pbUsers, pbUser)
+	}
+
+	// Create pagination metadata
+	pagination := &userpb.PaginationMeta{
+		CurrentPage: int32(result.Pagination.CurrentPage),
+		PerPage:     int32(result.Pagination.PerPage),
+		TotalPages:  int32(result.Pagination.TotalPages),
+		TotalCount:  int32(result.Pagination.TotalCount),
+		HasNext:     result.Pagination.HasNext,
+		HasPrev:     result.Pagination.HasPrev,
+	}
+
+	return &userpb.UserListResponse{
+		Success: true,
+		Code:    string(CodeSuccess),
+		Message: MsgUserListRetrieved,
+		Data: &userpb.UserListData{
+			Users:      pbUsers,
+			Pagination: pagination,
+		},
+	}, nil
+}
+
+func (h *UserHandler) GetUser(ctx context.Context, req *userpb.GetUserRequest) (*userpb.GetUserResponse, error) {
+	// Validate token
+	if strings.TrimSpace(req.Token) == "" {
+		return nil, NewValidationError(MsgTokenRequired)
+	}
+
+	// Validate user ID
+	if req.UserId <= 0 {
+		return nil, NewValidationError("User ID must be positive")
+	}
+
+	// Get user from usecase
+	user, err := h.UserUseCase.GetUser(req.Token, int(req.UserId))
+	if err != nil {
+		return nil, NewNotFoundError(MsgUserNotFound)
+	}
+
+	// Convert to protobuf format
+	userData := &userpb.UserData{
+		Id:        int32(user.ID),
+		Username:  user.Username,
+		Name:      user.Name,
+		Email:     deref(user.Email),
+		Phone:     user.Phone,
+		Mobile:    user.Mobile,
+		IsActive:  derefBool(user.IsActive),
+		RoleId:    int32(user.RoleID),
+		ImageUrl:  user.ImageURL,
+		CreatedAt: user.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		UpdatedAt: user.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
+	}
+
+	return &userpb.GetUserResponse{
+		Success: true,
+		Code:    string(CodeSuccess),
+		Message: MsgUserRetrieved,
+		Data:    userData,
+	}, nil
+}
+
+func (h *UserHandler) CreateUser(ctx context.Context, req *userpb.CreateUserRequest) (*userpb.CreateUserResponse, error) {
+	// Validate token
+	if strings.TrimSpace(req.Token) == "" {
+		return nil, NewValidationError(MsgTokenRequired)
+	}
+
+	// Validate required fields
+	if strings.TrimSpace(req.Username) == "" {
+		return nil, NewValidationError(MsgUsernameRequired)
+	}
+	if strings.TrimSpace(req.Name) == "" {
+		return nil, NewValidationError(MsgNameRequired)
+	}
+	if strings.TrimSpace(req.Email) == "" {
+		return nil, NewValidationError(MsgEmailRequired)
+	}
+	if strings.TrimSpace(req.Password) == "" {
+		return nil, NewValidationError(MsgPasswordRequired)
+	}
+
+	// Create user entity
+	user := &entity.User{
+		Username: req.Username,
+		Name:     req.Name,
+		Email:    &req.Email,
+		Phone:    req.Phone,
+		Mobile:   req.Mobile,
+		ImageURL: req.ImageUrl,
+		Password: req.Password,
+		IsActive: &req.IsActive,
+		RoleID:   int(req.RoleId),
+	}
+
+	// Create user via usecase
+	createdUser, err := h.UserUseCase.CreateUser(req.Token, user)
+	if err != nil {
+		if err.Error() == "username already exists" {
+			return nil, NewAlreadyExistsError(MsgUsernameExists)
+		}
+		if err.Error() == "email already exists" {
+			return nil, NewAlreadyExistsError(MsgEmailExists)
+		}
+		return nil, NewInternalError(MsgUserCreationFailed)
+	}
+
+	// Convert to protobuf format
+	userData := &userpb.UserData{
+		Id:        int32(createdUser.ID),
+		Username:  createdUser.Username,
+		Name:      createdUser.Name,
+		Email:     deref(createdUser.Email),
+		Phone:     createdUser.Phone,
+		Mobile:    createdUser.Mobile,
+		IsActive:  derefBool(createdUser.IsActive),
+		RoleId:    int32(createdUser.RoleID),
+		ImageUrl:  createdUser.ImageURL,
+		CreatedAt: createdUser.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		UpdatedAt: createdUser.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
+	}
+
+	return &userpb.CreateUserResponse{
+		Success: true,
+		Code:    string(CodeSuccess),
+		Message: MsgUserCreated,
+		Data:    userData,
+	}, nil
+}
+
+func (h *UserHandler) UpdateUser(ctx context.Context, req *userpb.UpdateUserRequest) (*userpb.UpdateUserResponse, error) {
+	// Validate token
+	if strings.TrimSpace(req.Token) == "" {
+		return nil, NewValidationError(MsgTokenRequired)
+	}
+
+	// Validate user ID
+	if req.UserId <= 0 {
+		return nil, NewValidationError("User ID must be positive")
+	}
+
+	// Validate required fields
+	if strings.TrimSpace(req.Username) == "" {
+		return nil, NewValidationError(MsgUsernameRequired)
+	}
+	if strings.TrimSpace(req.Name) == "" {
+		return nil, NewValidationError(MsgNameRequired)
+	}
+	if strings.TrimSpace(req.Email) == "" {
+		return nil, NewValidationError(MsgEmailRequired)
+	}
+
+	// Create update data
+	updateData := &entity.User{
+		Username: req.Username,
+		Name:     req.Name,
+		Email:    &req.Email,
+		Phone:    req.Phone,
+		Mobile:   req.Mobile,
+		ImageURL: req.ImageUrl,
+		IsActive: &req.IsActive,
+		RoleID:   int(req.RoleId),
+	}
+
+	// Update user via usecase
+	updatedUser, err := h.UserUseCase.UpdateUser(req.Token, int(req.UserId), updateData)
+	if err != nil {
+		if err.Error() == "username already exists" {
+			return nil, NewAlreadyExistsError(MsgUsernameExists)
+		}
+		if err.Error() == "email already exists" {
+			return nil, NewAlreadyExistsError(MsgEmailExists)
+		}
+		return nil, NewInternalError(MsgUserUpdateFailed)
+	}
+
+	// Convert to protobuf format
+	userData := &userpb.UserData{
+		Id:        int32(updatedUser.ID),
+		Username:  updatedUser.Username,
+		Name:      updatedUser.Name,
+		Email:     deref(updatedUser.Email),
+		Phone:     updatedUser.Phone,
+		Mobile:    updatedUser.Mobile,
+		IsActive:  derefBool(updatedUser.IsActive),
+		RoleId:    int32(updatedUser.RoleID),
+		ImageUrl:  updatedUser.ImageURL,
+		CreatedAt: updatedUser.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		UpdatedAt: updatedUser.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
+	}
+
+	return &userpb.UpdateUserResponse{
+		Success: true,
+		Code:    string(CodeSuccess),
+		Message: MsgUserUpdated,
+		Data:    userData,
+	}, nil
+}
+
+func (h *UserHandler) DeleteUser(ctx context.Context, req *userpb.DeleteUserRequest) (*userpb.DeleteUserResponse, error) {
+	// Validate token
+	if strings.TrimSpace(req.Token) == "" {
+		return nil, NewValidationError(MsgTokenRequired)
+	}
+
+	// Validate user ID
+	if req.UserId <= 0 {
+		return nil, NewValidationError("User ID must be positive")
+	}
+
+	// Delete user via usecase
+	err := h.UserUseCase.DeleteUser(req.Token, int(req.UserId))
+	if err != nil {
+		return nil, NewInternalError(MsgUserDeletionFailed)
+	}
+
+	return &userpb.DeleteUserResponse{
+		Success: true,
+		Code:    string(CodeSuccess),
+		Message: MsgUserDeleted,
+	}, nil
 }

@@ -16,13 +16,13 @@ import (
 func main() {
 	// Load configuration
 	cfg := config.Load()
-	
+
 	// Connect to database
 	db, err := cfg.ConnectDatabase()
 	if err != nil {
 		log.Fatal("Database connection failed:", err)
 	}
-	
+
 	// Auto-migrate the schema
 	err = db.AutoMigrate(&entity.User{})
 	if err != nil {

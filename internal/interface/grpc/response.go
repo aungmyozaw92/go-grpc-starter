@@ -8,32 +8,43 @@ import (
 // Response messages for consistency
 const (
 	// Success messages
-	MsgUserRegistered  = "User registered successfully"
-	MsgUserLoggedIn    = "User logged in successfully"
-	MsgProfileRetrieved = "User profile retrieved successfully"
-	
+	MsgUserRegistered    = "User registered successfully"
+	MsgUserLoggedIn      = "User logged in successfully"
+	MsgProfileRetrieved  = "User profile retrieved successfully"
+	MsgUserListRetrieved = "User list retrieved successfully"
+	MsgUserRetrieved     = "User retrieved successfully"
+	MsgUserCreated       = "User created successfully"
+	MsgUserUpdated       = "User updated successfully"
+	MsgUserDeleted       = "User deleted successfully"
+
 	// Error messages - Validation
-	MsgUsernameRequired     = "Username is required"
-	MsgNameRequired         = "Name is required"
-	MsgEmailRequired        = "Email is required"
-	MsgPasswordRequired     = "Password is required"
-	MsgTokenRequired        = "Authentication token is required"
-	MsgInvalidEmail         = "Invalid email format"
-	MsgInvalidUsername      = "Username must be 3-30 characters and contain only letters, numbers, and underscores"
-	MsgPasswordTooShort     = "Password must be at least 6 characters long"
-	MsgInvalidRoleID        = "Role ID must be a positive integer"
-	
+	MsgUsernameRequired = "Username is required"
+	MsgNameRequired     = "Name is required"
+	MsgEmailRequired    = "Email is required"
+	MsgPasswordRequired = "Password is required"
+	MsgTokenRequired    = "Authentication token is required"
+	MsgInvalidEmail     = "Invalid email format"
+	MsgInvalidUsername  = "Username must be 3-30 characters and contain only letters, numbers, and underscores"
+	MsgPasswordTooShort = "Password must be at least 6 characters long"
+	MsgInvalidRoleID    = "Role ID must be a positive integer"
+	MsgUsernameExists   = "Username already exists"
+	MsgEmailExists      = "Email address already exists"
+
 	// Error messages - Authentication/Authorization
-	MsgInvalidCredentials   = "Invalid username or password"
-	MsgInvalidToken         = "Invalid or expired token"
-	MsgUnauthorized         = "Unauthorized access"
-	
+	MsgInvalidCredentials = "Invalid username or password"
+	MsgInvalidToken       = "Invalid or expired token"
+	MsgUnauthorized       = "Unauthorized access"
+
 	// Error messages - Internal/System
 	MsgUserRegistrationFailed = "Failed to register user"
-	MsgUserLoginFailed       = "Failed to authenticate user"
+	MsgUserLoginFailed        = "Failed to authenticate user"
 	MsgProfileRetrievalFailed = "Failed to retrieve user profile"
-	MsgInternalError         = "Internal server error"
-	MsgDatabaseError         = "Database operation failed"
+	MsgUserNotFound           = "User not found"
+	MsgUserCreationFailed     = "Failed to create user"
+	MsgUserUpdateFailed       = "Failed to update user"
+	MsgUserDeletionFailed     = "Failed to delete user"
+	MsgInternalError          = "Internal server error"
+	MsgDatabaseError          = "Database operation failed"
 )
 
 // Error helper functions for consistent error responses
@@ -69,9 +80,9 @@ const (
 	CodeValidationError     ResponseCode = "VALIDATION_ERROR"
 	CodeAuthenticationError ResponseCode = "AUTHENTICATION_ERROR"
 	CodeAuthorizationError  ResponseCode = "AUTHORIZATION_ERROR"
-	CodeNotFound           ResponseCode = "NOT_FOUND"
-	CodeAlreadyExists      ResponseCode = "ALREADY_EXISTS"
-	CodeInternalError      ResponseCode = "INTERNAL_ERROR"
+	CodeNotFound            ResponseCode = "NOT_FOUND"
+	CodeAlreadyExists       ResponseCode = "ALREADY_EXISTS"
+	CodeInternalError       ResponseCode = "INTERNAL_ERROR"
 )
 
 // Helper function to get response code from gRPC error
@@ -79,12 +90,12 @@ func GetResponseCode(err error) ResponseCode {
 	if err == nil {
 		return CodeSuccess
 	}
-	
+
 	st, ok := status.FromError(err)
 	if !ok {
 		return CodeInternalError
 	}
-	
+
 	switch st.Code() {
 	case codes.InvalidArgument:
 		return CodeValidationError
@@ -101,4 +112,4 @@ func GetResponseCode(err error) ResponseCode {
 	default:
 		return CodeInternalError
 	}
-} 
+}
